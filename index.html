@@ -3,108 +3,164 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Император - Карточная игра</title>
+    <title>E-Card: Император</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
     <style>
-        @keyframes cardFlip {
-            0% { transform: rotateY(0deg) scale(1); }
-            50% { transform: rotateY(90deg) scale(1.1); }
-            100% { transform: rotateY(0deg) scale(1); }
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3, .card-font { font-family: 'Cinzel', serif; }
+
+        /* 3D Card Animations */
+        .perspective-1000 { perspective: 1000px; }
+        .transform-style-3d { transform-style: preserve-3d; }
+        .backface-hidden { backface-visibility: hidden; }
+        .rotate-y-180 { transform: rotateY(180deg); }
+
+        @keyframes dealCard {
+            from { transform: translateY(-100vh) rotate(720deg) scale(0.5); opacity: 0; }
+            to { transform: translateY(0) rotate(0) scale(1); opacity: 1; }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @keyframes revealWinner {
+            0% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+            50% { transform: scale(1.1); box-shadow: 0 0 50px rgba(255, 215, 0, 0.5); }
+            100% { transform: scale(1); box-shadow: 0 0 20px rgba(255, 215, 0, 0.2); }
+        }
+
+        .animate-deal { animation: dealCard 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
+        .animate-float { animation: float 3s ease-in-out infinite; }
+        .animate-winner { animation: revealWinner 1s ease-out infinite; }
+
+        /* Card Styles */
+        .card-inner {
+            transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-style: preserve-3d;
         }
         
-        @keyframes cardSlide {
-            0% { transform: translateY(-20px); opacity: 0; }
-            100% { transform: translateY(0); opacity: 1; }
+        .card.flipped .card-inner {
+            transform: rotateY(180deg);
         }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        
-        .card-flip {
-            animation: cardFlip 0.6s ease-in-out;
-        }
-        
-        .card-slide {
-            animation: cardSlide 0.4s ease-out;
-        }
-        
-        .pulse-anim {
-            animation: pulse 2s ease-in-out infinite;
-        }
-        
-        .card-hover {
-            transition: all 0.2s ease;
-        }
-        
-        .card-hover:hover {
-            transform: translateY(-10px) scale(1.05);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+
+        .bg-pattern {
+            background-color: #0f172a;
+            background-image: radial-gradient(#1e293b 1px, transparent 1px);
+            background-size: 20px 20px;
         }
     </style>
 </head>
-<body class="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 min-h-screen">
+<body class="bg-pattern min-h-screen text-gray-100 overflow-x-hidden">
     <div id="app"></div>
 
     <script>
         // ==================== FIREBASE CONFIG ====================
         const firebaseConfig = {
-            apiKey: "AIzaSyBFjleDsbPvsNnlkKp9q5a-Xq3IyTus23o",
-            authDomain: "card-game-d1fa1.firebaseapp.com",
-            databaseURL: "https://card-game-d1fa1-default-rtdb.firebaseio.com",
-            projectId: "card-game-d1fa1",
-            storageBucket: "card-game-d1fa1.firebasestorage.app",
-            messagingSenderId: "897674662962",
-            appId: "1:897674662962:web:c7824186c666e30cacd82b",
-            measurementId: "G-W9KWPSR8K8"
-        };
+  apiKey: "AIzaSyBFjleDsbPvsNnlkKp9q5a-Xq3IyTus23o",
+  authDomain: "card-game-d1fa1.firebaseapp.com",
+  databaseURL: "https://card-game-d1fa1-default-rtdb.firebaseio.com",
+  projectId: "card-game-d1fa1",
+  storageBucket: "card-game-d1fa1.firebasestorage.app",
+  messagingSenderId: "897674662962",
+  appId: "1:897674662962:web:c7824186c666e30cacd82b",
+  measurementId: "G-W9KWPSR8K8"
+};
 
         let database = null;
+        // Проверка: работаем локально или через Firebase
         const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY_HERE";
         
         if (isFirebaseConfigured) {
-            firebase.initializeApp(firebaseConfig);
-            database = firebase.database();
+            try {
+                firebase.initializeApp(firebaseConfig);
+                database = firebase.database();
+            } catch (e) {
+                console.error("Firebase Error:", e);
+            }
         }
 
-        // ==================== GAME LOGIC ====================
+        // ==================== CONSTANTS & STATE ====================
         const CARDS = {
-            E: { name: 'Император', emoji: '👑', color: 'from-amber-600 to-yellow-700', beats: 'C' },
-            C: { name: 'Гражданин', emoji: '👥', color: 'from-blue-600 to-indigo-700', beats: 'S' },
-            S: { name: 'Раб', emoji: '🔗', color: 'from-gray-500 to-gray-700', beats: 'E' }
+            E: { 
+                id: 'E', name: 'Император', role: 'Emperor', 
+                icon: '👑', 
+                desc: 'Побеждает Гражданина',
+                bg: 'bg-gradient-to-br from-yellow-600 via-yellow-500 to-amber-700',
+                border: 'border-yellow-400',
+                beats: 'C' 
+            },
+            C: { 
+                id: 'C', name: 'Гражданин', role: 'Citizen', 
+                icon: '👤', 
+                desc: 'Побеждает Раба',
+                bg: 'bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-700',
+                border: 'border-blue-400',
+                beats: 'S' 
+            },
+            S: { 
+                id: 'S', name: 'Раб', role: 'Slave', 
+                icon: '⛓️', 
+                desc: 'Побеждает Императора',
+                bg: 'bg-gradient-to-br from-gray-600 via-gray-500 to-gray-800',
+                border: 'border-red-500',
+                beats: 'E' 
+            }
         };
 
-        const INITIAL_DECK = ['E', 'S', 'C', 'C', 'C'];
+        const INITIAL_DECK = ['E', 'S', 'C', 'C', 'C']; // Стандартная колода E-Card
 
         let state = {
             screen: 'menu',
             gameId: '',
             playerName: '',
             isHost: false,
-            myCards: [...INITIAL_DECK],
-            opponentCards: 5,
+            myCards: [], // Будет инициализировано при старте
+            opponentCardsCount: 5,
             myChoice: null,
             opponentChoice: null,
             myScore: 0,
             opponentScore: 0,
             round: 1,
-            opponentName: 'Противник',
+            opponentName: '???',
             waitingForOpponent: false,
-            roundResult: '',
+            roundResult: null, // 'win', 'lose', 'draw'
+            gameResult: null,  // 'win', 'lose', 'draw'
             error: '',
             showModal: null,
-            animateCards: false
+            revealPhase: false // Для анимации вскрытия
         };
 
-        // ==================== FIREBASE FUNCTIONS ====================
+        // ==================== STORAGE & SYNC ====================
         function saveGame(gameId, data) {
             if (database) {
                 database.ref('games/' + gameId).set(data);
             } else {
                 localStorage.setItem('game_' + gameId, JSON.stringify(data));
+                // Имитация задержки сети для локальной игры
+                setTimeout(() => window.dispatchEvent(new Event('storage')), 50);
+            }
+        }
+
+        function updateGame(gameId, updates) {
+            if (database) {
+                database.ref('games/' + gameId).update(updates);
+            } else {
+                const current = JSON.parse(localStorage.getItem('game_' + gameId) || '{}');
+                const newData = { ...current, ...updates };
+                localStorage.setItem('game_' + gameId, JSON.stringify(newData));
                 window.dispatchEvent(new Event('storage'));
             }
         }
@@ -125,59 +181,72 @@
 
         function loadGame(gameId, callback) {
             if (database) {
-                database.ref('games/' + gameId).once('value').then((snapshot) => {
-                    callback(snapshot.val());
-                });
+                database.ref('games/' + gameId).once('value').then((s) => callback(s.val()));
             } else {
                 const data = localStorage.getItem('game_' + gameId);
                 callback(data ? JSON.parse(data) : null);
             }
         }
 
-        // ==================== GAME FUNCTIONS ====================
+        // ==================== CORE LOGIC ====================
+        
+        // --- 1. BUG FIX: Исправлена логика удаления карты ---
+        function playCard(cardType) {
+            if (state.myChoice || state.waitingForOpponent) return;
+
+            loadGame(state.gameId, (game) => {
+                const myRole = state.isHost ? 'player1' : 'player2';
+                const currentCards = game[myRole + 'Cards'] || [];
+                
+                // Находим ИНДЕКС первой подходящей карты
+                const cardIndex = currentCards.indexOf(cardType);
+
+                if (cardIndex === -1) {
+                    console.error("Попытка сыграть картой, которой нет в руке!");
+                    return;
+                }
+
+                // Удаляем ровно одну карту по индексу
+                currentCards.splice(cardIndex, 1);
+
+                // Обновляем состояние
+                const updates = {};
+                updates[myRole + 'Cards'] = currentCards;
+                updates[myRole + 'Choice'] = cardType;
+
+                state.myCards = currentCards;
+                state.myChoice = cardType;
+                state.waitingForOpponent = true;
+
+                updateGame(state.gameId, updates);
+                render();
+            });
+        }
+
         function determineWinner(card1, card2) {
             if (card1 === card2) return 'draw';
             if (CARDS[card1].beats === card2) return 'player';
             return 'opponent';
         }
 
-        function showCreateModal() {
-            state.showModal = 'create';
-            state.error = '';
-            render();
-        }
-
-        function showJoinModal() {
-            state.showModal = 'join';
-            state.error = '';
-            render();
-        }
-
-        function closeModal() {
-            state.showModal = null;
-            state.error = '';
-            render();
-        }
-
         function createGame() {
-            const nameInput = document.getElementById('createName');
-            const name = nameInput?.value.trim();
-            
-            if (!name) {
-                state.error = 'Введите имя!';
-                render();
-                return;
-            }
+            const name = document.getElementById('createName').value.trim();
+            if (!name) return setError('Введите имя');
 
             const gameId = Math.random().toString(36).substr(2, 6).toUpperCase();
+            const deck = [...INITIAL_DECK].sort(() => Math.random() - 0.5); // Перемешаем
+
             const gameData = {
                 player1Name: name,
                 player2Name: null,
                 currentRound: 1,
                 player1Choice: null,
                 player2Choice: null,
-                player1Cards: [...INITIAL_DECK],
-                player2Cards: [...INITIAL_DECK],
+                player1Cards: deck,
+                player2Cards: deck, // У обоих одинаковый набор
+                player1Score: 0,
+                player2Score: 0,
+                status: 'waiting', // waiting, playing, finished
                 createdAt: Date.now()
             };
 
@@ -187,53 +256,37 @@
             state.playerName = name;
             state.isHost = true;
             state.screen = 'lobby';
-            state.myCards = [...INITIAL_DECK];
+            state.myCards = deck;
             state.showModal = null;
-            
             render();
             startWatching();
         }
 
         function joinGame() {
-            const nameInput = document.getElementById('joinName');
-            const codeInput = document.getElementById('joinCode');
-            const name = nameInput?.value.trim();
-            const gameId = codeInput?.value.trim().toUpperCase();
-            
-            if (!name) {
-                state.error = 'Введите имя!';
-                render();
-                return;
-            }
+            const name = document.getElementById('joinName').value.trim();
+            const code = document.getElementById('joinCode').value.trim().toUpperCase();
 
-            if (!gameId) {
-                state.error = 'Введите код игры!';
-                render();
-                return;
-            }
+            if (!name) return setError('Введите имя');
+            if (!code) return setError('Введите код');
 
-            loadGame(gameId, (game) => {
-                if (!game) {
-                    state.error = 'Игра не найдена';
-                    render();
-                    return;
-                }
+            loadGame(code, (game) => {
+                if (!game) return setError('Игра не найдена');
+                if (game.player2Name) return setError('Игра уже идет');
 
-                if (game.player2Name) {
-                    state.error = 'Игра уже заполнена';
-                    render();
-                    return;
-                }
+                const deck = [...INITIAL_DECK].sort(() => Math.random() - 0.5);
 
-                game.player2Name = name;
-                saveGame(gameId, game);
+                updateGame(code, {
+                    player2Name: name,
+                    status: 'playing',
+                    player2Cards: deck
+                });
 
-                state.gameId = gameId;
+                state.gameId = code;
                 state.playerName = name;
                 state.opponentName = game.player1Name;
                 state.isHost = false;
                 state.screen = 'playing';
-                state.myCards = [...INITIAL_DECK];
+                state.myCards = deck;
                 state.showModal = null;
 
                 render();
@@ -245,376 +298,413 @@
             watchGame(state.gameId, (game) => {
                 if (!game) return;
 
+                // Лобби -> Игра
                 if (state.screen === 'lobby' && game.player2Name) {
                     state.opponentName = game.player2Name;
                     state.screen = 'playing';
                     render();
                 }
 
+                // Логика раунда
                 if (state.screen === 'playing') {
                     const myRole = state.isHost ? 'player1' : 'player2';
                     const oppRole = state.isHost ? 'player2' : 'player1';
 
-                    // Синхронизируем колоды из базы
-                    state.myCards = game[myRole + 'Cards'] || state.myCards;
-                    state.opponentCards = (game[oppRole + 'Cards'] || []).length;
+                    // Синхронизация данных
+                    state.myCards = game[myRole + 'Cards'] || [];
+                    state.opponentCardsCount = (game[oppRole + 'Cards'] || []).length;
+                    state.myScore = game[myRole + 'Score'] || 0;
+                    state.opponentScore = game[oppRole + 'Score'] || 0;
+                    state.round = game.currentRound;
 
-                    if (game[myRole + 'Choice'] && game[oppRole + 'Choice'] && !state.opponentChoice) {
-                        const myCard = game[myRole + 'Choice'];
-                        const oppCard = game[oppRole + 'Choice'];
-
-                        state.myChoice = myCard;
-                        state.opponentChoice = oppCard;
-                        state.waitingForOpponent = false;
-                        state.animateCards = true;
-
-                        const winner = determineWinner(myCard, oppCard);
-                        if (winner === 'player') {
-                            state.myScore++;
-                            state.roundResult = 'Вы победили в раунде! 🎉';
-                        } else if (winner === 'opponent') {
-                            state.opponentScore++;
-                            state.roundResult = 'Противник победил 😔';
-                        } else {
-                            state.roundResult = 'Ничья ⚖️';
-                        }
-
+                    // Проверка конца игры
+                    if (game.status === 'finished') {
+                        state.gameResult = state.myScore > state.opponentScore ? 'win' : (state.myScore < state.opponentScore ? 'lose' : 'draw');
+                        state.screen = 'finished';
                         render();
+                        return;
+                    }
 
+                    // Обработка хода (Showdown)
+                    const myChoice = game[myRole + 'Choice'];
+                    const oppChoice = game[oppRole + 'Choice'];
+
+                    if (myChoice && oppChoice && !state.revealPhase) {
+                        // Оба походили, начинаем фазу вскрытия
+                        state.myChoice = myChoice;
+                        state.opponentChoice = oppChoice;
+                        state.revealPhase = true;
+                        state.waitingForOpponent = false;
+
+                        const roundWinner = determineWinner(myChoice, oppChoice);
+                        
+                        // Сохраняем результат раунда локально для отображения
+                        if (roundWinner === 'player') state.roundResult = 'win';
+                        else if (roundWinner === 'opponent') state.roundResult = 'lose';
+                        else state.roundResult = 'draw';
+
+                        render(); // Показать закрытые карты на столе
+
+                        // Таймер анимации вскрытия
                         setTimeout(() => {
-                            if (game.currentRound < 5) {
-                                game.currentRound++;
-                                game.player1Choice = null;
-                                game.player2Choice = null;
-                                saveGame(state.gameId, game);
+                            // Если я хост, я обновляю счет в БД
+                            if (state.isHost) {
+                                const updates = {
+                                    player1Choice: null, // Сброс выбора
+                                    player2Choice: null,
+                                    currentRound: game.currentRound + 1
+                                };
+                                
+                                if (roundWinner === 'player') updates[myRole + 'Score'] = (game[myRole + 'Score'] || 0) + 1;
+                                else if (roundWinner === 'opponent') updates[oppRole + 'Score'] = (game[oppRole + 'Score'] || 0) + 1;
 
-                                state.round = game.currentRound;
-                                state.myChoice = null;
-                                state.opponentChoice = null;
-                                state.roundResult = '';
-                                state.waitingForOpponent = false;
-                                state.animateCards = false;
-                                render();
-                            } else {
-                                state.screen = 'finished';
-                                render();
+                                if (game.currentRound >= 5) {
+                                    updates.status = 'finished';
+                                }
+
+                                updateGame(state.gameId, updates);
                             }
-                        }, 3000);
+                        }, 4000); // 4 секунды смотрим на результат
+                    } 
+                    else if (!myChoice && !oppChoice && state.revealPhase) {
+                        // Сброс на новый раунд
+                        state.revealPhase = false;
+                        state.myChoice = null;
+                        state.opponentChoice = null;
+                        state.roundResult = null;
+                        render();
                     }
                 }
             });
         }
 
-        function playCard(card) {
-            if (state.myChoice || state.waitingForOpponent) return;
-
-            loadGame(state.gameId, (game) => {
-                const myRole = state.isHost ? 'player1' : 'player2';
-                
-                // Удаляем карту из колоды
-                const newCards = game[myRole + 'Cards'].filter(c => {
-                    if (c === card) {
-                        const found = true;
-                        card = null; // удаляем только первую найденную
-                        return false;
-                    }
-                    return true;
-                });
-                
-                game[myRole + 'Cards'] = newCards;
-                game[myRole + 'Choice'] = card || game[myRole + 'Cards'][0];
-                
-                state.myCards = newCards;
-                state.myChoice = game[myRole + 'Choice'];
-                state.waitingForOpponent = true;
-
-                saveGame(state.gameId, game);
-                render();
-            });
+        // ==================== UI HELPERS ====================
+        function setError(msg) {
+            state.error = msg;
+            render();
+            setTimeout(() => { state.error = ''; render(); }, 3000);
         }
 
-        function copyCode() {
-            navigator.clipboard.writeText(state.gameId);
-            const btn = event.target.closest('button');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '✓ Скопировано!';
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-            }, 2000);
-        }
-
-        function resetGame() {
-            state = {
-                screen: 'menu',
-                gameId: '',
-                playerName: '',
-                isHost: false,
-                myCards: [...INITIAL_DECK],
-                opponentCards: 5,
-                myChoice: null,
-                opponentChoice: null,
-                myScore: 0,
-                opponentScore: 0,
-                round: 1,
-                opponentName: 'Противник',
-                waitingForOpponent: false,
-                roundResult: '',
-                error: '',
-                showModal: null,
-                animateCards: false
-            };
+        function showModal(type) {
+            state.showModal = type;
+            state.error = '';
             render();
         }
 
-        // ==================== RENDER ====================
+        function closeModal() {
+            state.showModal = null;
+            render();
+        }
+
+        function resetApp() {
+            window.location.reload();
+        }
+
+        // ==================== RENDERER ====================
         function render() {
             const app = document.getElementById('app');
+            let content = '';
 
-            const createModal = state.showModal === 'create' ? `
-                <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-8 max-w-md w-full shadow-2xl border border-gray-700">
-                        <h2 class="text-3xl font-bold text-white mb-6 text-center">🎮 Создать игру</h2>
-                        <input 
-                            type="text" 
-                            id="createName"
-                            placeholder="Введите ваше имя" 
-                            class="w-full bg-gray-700/50 text-white placeholder-gray-400 px-4 py-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-lg mb-4 border border-gray-600"
-                            onkeypress="if(event.key === 'Enter') createGame()"
-                        >
-                        ${state.error ? `
-                            <div class="bg-red-500/20 border border-red-500/40 rounded-xl p-3 mb-4">
-                                <p class="text-red-200 text-sm text-center">⚠️ ${state.error}</p>
-                            </div>
-                        ` : ''}
-                        <div class="flex gap-3">
-                            <button onclick="createGame()" class="flex-1 bg-gradient-to-r from-amber-600 to-yellow-700 hover:from-amber-700 hover:to-yellow-800 text-white font-bold py-4 rounded-xl transition-all shadow-lg">
-                                Создать
-                            </button>
-                            <button onclick="closeModal()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 rounded-xl transition-all">
-                                Отмена
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            ` : '';
+            // --- Modal Overlays ---
+            if (state.showModal) {
+                content += renderModal();
+            }
 
-            const joinModal = state.showModal === 'join' ? `
-                <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-8 max-w-md w-full shadow-2xl border border-gray-700">
-                        <h2 class="text-3xl font-bold text-white mb-6 text-center">🚪 Присоединиться</h2>
-                        <input 
-                            type="text" 
-                            id="joinName"
-                            placeholder="Введите ваше имя" 
-                            class="w-full bg-gray-700/50 text-white placeholder-gray-400 px-4 py-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg mb-4 border border-gray-600"
-                        >
-                        <input 
-                            type="text" 
-                            id="joinCode"
-                            placeholder="Код игры (например: ABC123)" 
-                            class="w-full bg-gray-700/50 text-white placeholder-gray-400 px-4 py-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg mb-4 uppercase border border-gray-600"
-                            onkeypress="if(event.key === 'Enter') joinGame()"
-                        >
-                        ${state.error ? `
-                            <div class="bg-red-500/20 border border-red-500/40 rounded-xl p-3 mb-4">
-                                <p class="text-red-200 text-sm text-center">⚠️ ${state.error}</p>
-                            </div>
-                        ` : ''}
-                        <div class="flex gap-3">
-                            <button onclick="joinGame()" class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-bold py-4 rounded-xl transition-all shadow-lg">
-                                Присоединиться
-                            </button>
-                            <button onclick="closeModal()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 rounded-xl transition-all">
-                                Отмена
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            ` : '';
-
+            // --- Screens ---
             if (state.screen === 'menu') {
-                app.innerHTML = `
-                    <div class="min-h-screen flex items-center justify-center p-4">
-                        <div class="bg-gray-800/50 backdrop-blur-md rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-700">
-                            <h1 class="text-5xl font-bold text-white text-center mb-3">⚔️ Император</h1>
-                            <p class="text-gray-400 text-center mb-8">Карточная игра из аниме Кайдзи</p>
-                            
-                            ${!isFirebaseConfigured ? `
-                                <div class="bg-yellow-500/20 border border-yellow-500/40 rounded-xl p-4 mb-6">
-                                    <p class="text-yellow-200 text-sm text-center">
-                                        ⚠️ Firebase не настроен. Игра работает только локально.
-                                    </p>
-                                </div>
-                            ` : ''}
-                            
-                            <div class="space-y-4">
-                                <button onclick="showCreateModal()" class="w-full bg-gradient-to-r from-amber-600 to-yellow-700 hover:from-amber-700 hover:to-yellow-800 text-white font-bold py-5 rounded-xl transition-all shadow-lg text-lg">
-                                    🎮 Создать игру
-                                </button>
-                                <button onclick="showJoinModal()" class="w-full bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-bold py-5 rounded-xl transition-all shadow-lg text-lg">
-                                    🚪 Присоединиться к игре
-                                </button>
-                            </div>
-
-                            <div class="mt-8 bg-gray-700/30 rounded-xl p-5 border border-gray-600">
-                                <h3 class="text-white font-bold mb-3 text-center">📜 Правила</h3>
-                                <div class="space-y-2 text-gray-300 text-sm">
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-xl">👑</span>
-                                        <span>Император побеждает Гражданина</span>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-xl">👥</span>
-                                        <span>Гражданин побеждает Раба</span>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-xl">🔗</span>
-                                        <span>Раб побеждает Императора</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    ${createModal}
-                    ${joinModal}
-                `;
-
-                setTimeout(() => {
-                    if (state.showModal === 'create') {
-                        document.getElementById('createName')?.focus();
-                    } else if (state.showModal === 'join') {
-                        document.getElementById('joinName')?.focus();
-                    }
-                }, 0);
-
+                content += renderMenu();
             } else if (state.screen === 'lobby') {
-                app.innerHTML = `
-                    <div class="min-h-screen flex items-center justify-center p-4">
-                        <div class="bg-gray-800/50 backdrop-blur-md rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-700">
-                            <h2 class="text-3xl font-bold text-white text-center mb-6">⏳ Ожидание противника...</h2>
-                            
-                            <div class="bg-gray-700/30 rounded-xl p-6 mb-6 border border-gray-600">
-                                <p class="text-gray-400 text-center mb-4">Код игры:</p>
-                                <div class="flex items-center gap-3">
-                                    <input type="text" value="${state.gameId}" readonly class="flex-1 bg-gray-700/50 text-white text-3xl font-mono font-bold text-center py-4 rounded-lg border-2 border-gray-600">
-                                    <button onclick="copyCode()" class="bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white px-4 py-4 rounded-lg transition-all shadow-lg whitespace-nowrap">
-                                        📋 Копировать
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div class="bg-blue-500/20 border border-blue-500/30 rounded-xl p-4">
-                                <p class="text-blue-200 text-center text-sm">
-                                    📤 Отправьте этот код другу
-                                </p>
-                            </div>
-                            
-                            <div class="mt-6 flex justify-center">
-                                <div class="pulse-anim text-gray-300">Ожидаем подключения...</div>
-                            </div>
-                        </div>
-                    </div>
-                `;
+                content += renderLobby();
             } else if (state.screen === 'playing') {
-                app.innerHTML = `
-                    <div class="min-h-screen p-4">
-                        <div class="max-w-5xl mx-auto">
-                            <div class="bg-gray-800/50 backdrop-blur-md rounded-3xl p-6 mb-6 border border-gray-700">
-                                <div class="flex justify-between items-center text-white flex-wrap gap-4">
-                                    <div class="text-2xl font-bold">🎯 Раунд ${state.round} / 5</div>
-                                    <div class="flex gap-8 text-2xl font-bold">
-                                        <span class="text-emerald-400">${state.playerName}: ${state.myScore}</span>
-                                        <span class="text-rose-400">${state.opponentName}: ${state.opponentScore}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="space-y-6">
-                                <div class="bg-gray-800/50 backdrop-blur-md rounded-2xl p-6 border border-gray-700">
-                                    <h3 class="text-white font-bold text-2xl mb-4">👤 ${state.opponentName}</h3>
-                                    <div class="flex gap-3 justify-center mb-6">
-                                        ${Array(state.opponentCards).fill(0).map((_, i) => 
-                                            `<div class="w-20 h-32 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl shadow-lg border-2 border-gray-600 card-slide" style="animation-delay: ${i * 0.1}s"></div>`
-                                        ).join('')}
-                                    </div>
-                                    ${state.opponentChoice ? `
-                                        <div class="flex justify-center">
-                                            <div class="w-24 h-36 rounded-xl shadow-2xl bg-gradient-to-br ${CARDS[state.opponentChoice].color} flex flex-col items-center justify-center text-white border-2 border-gray-600 ${state.animateCards ? 'card-flip' : ''}">
-                                                <div class="text-5xl mb-2">${CARDS[state.opponentChoice].emoji}</div>
-                                                <span class="text-sm font-bold">${CARDS[state.opponentChoice].name}</span>
-                                            </div>
-                                        </div>
-                                    ` : ''}
-                                </div>
-
-                                ${state.roundResult ? `
-                                    <div class="bg-gray-800/50 backdrop-blur-md rounded-2xl p-8 text-center border border-gray-700 card-slide">
-                                        <h3 class="text-white text-3xl font-bold">${state.roundResult}</h3>
-                                    </div>
-                                ` : ''}
-
-                                ${state.waitingForOpponent && !state.roundResult ? `
-                                    <div class="bg-blue-500/20 backdrop-blur-md rounded-2xl p-6 text-center border border-blue-500/30">
-                                        <h3 class="text-blue-200 text-xl pulse-anim">⏳ Ожидание хода противника...</h3>
-                                    </div>
-                                ` : ''}
-
-                                <div class="bg-gray-800/50 backdrop-blur-md rounded-2xl p-6 border border-gray-700">
-                                    <h3 class="text-white font-bold text-2xl mb-4">🎮 ${state.playerName} (Вы)</h3>
-                                    ${state.myChoice ? `
-                                        <div class="flex justify-center">
-                                            <div class="w-24 h-36 rounded-xl shadow-2xl bg-gradient-to-br ${CARDS[state.myChoice].color} flex flex-col items-center justify-center text-white border-2 border-gray-600 ${state.animateCards ? 'card-flip' : ''}">
-                                                <div class="text-5xl mb-2">${CARDS[state.myChoice].emoji}</div>
-                                                <span class="text-sm font-bold">${CARDS[state.myChoice].name}</span>
-                                            </div>
-                                        </div>
-                                    ` : `
-                                        <p class="text-gray-400 text-center mb-4">Выберите карту:</p>
-                                        <div class="flex gap-3 justify-center flex-wrap">
-                                            ${state.myCards.map((card, i) => `
-                                                <div onclick="playCard('${card}')" class="${state.waitingForOpponent ? 'opacity-50' : 'cursor-pointer card-hover'} w-24 h-36 rounded-xl shadow-2xl bg-gradient-to-br ${CARDS[card].color} flex flex-col items-center justify-center text-white border-2 border-gray-600 card-slide" style="animation-delay: ${i * 0.1}s">
-                                                    <div class="text-5xl mb-2">${CARDS[card].emoji}</div>
-                                                    <span class="text-sm font-bold">${CARDS[card].name}</span>
-                                                </div>
-                                            `).join('')}
-                                        </div>
-                                    `}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
+                content += renderGame();
             } else if (state.screen === 'finished') {
-                const iWon = state.myScore > state.opponentScore;
-                const isDraw = state.myScore === state.opponentScore;
-                
-                app.innerHTML = `
-                    <div class="min-h-screen flex items-center justify-center p-4">
-                        <div class="bg-gray-800/50 backdrop-blur-md rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-700 card-slide">
-                            <h2 class="text-5xl font-bold text-white text-center mb-8">
-                                ${isDraw ? '⚖️ Ничья!' : iWon ? '🎉 Победа!' : '😔 Поражение'}
-                            </h2>
-                            
-                            <div class="bg-gray-700/30 rounded-xl p-6 mb-6 border border-gray-600">
-                                <div class="text-center mb-4">
-                                    <div class="text-6xl font-bold text-white mb-2">${state.myScore} : ${state.opponentScore}</div>
-                                    <div class="flex justify-between text-gray-400 text-sm">
-                                        <span>${state.playerName}</span>
-                                        <span>${state.opponentName}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <button onclick="resetGame()" class="w-full bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-bold py-5 rounded-xl transition-all shadow-lg text-lg">
-                                🏠 Вернуться в меню
-                            </button>
-                        </div>
+                content += renderFinished();
+            }
+
+            app.innerHTML = content;
+        }
+
+        function renderCard(cardType, isFaceUp = true, isInteractable = false, delay = 0) {
+            const card = CARDS[cardType] || {};
+            
+            // Если карта лицом вниз (рубашка)
+            if (!isFaceUp) {
+                return `
+                    <div class="relative w-24 h-36 rounded-xl shadow-2xl transition-all duration-300 transform hover:-translate-y-2 animate-deal" style="animation-delay: ${delay}s">
+                         <div class="w-full h-full rounded-xl bg-gradient-to-br from-gray-800 to-black border-2 border-gray-600 flex items-center justify-center overflow-hidden">
+                            <div class="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')]"></div>
+                            <div class="text-4xl opacity-50">⚔️</div>
+                         </div>
                     </div>
                 `;
             }
+
+            // Если карта лицом вверх
+            return `
+                <div 
+                    onclick="${isInteractable ? `playCard('${cardType}')` : ''}" 
+                    class="
+                        group relative w-24 h-36 perspective-1000 cursor-pointer 
+                        ${isInteractable ? 'hover:-translate-y-6 hover:rotate-2 hover:z-10 transition-all duration-300' : ''}
+                        animate-deal
+                    "
+                    style="animation-delay: ${delay}s"
+                >
+                    <div class="w-full h-full rounded-xl shadow-2xl ${card.bg} p-1 border-2 ${card.border} relative overflow-hidden">
+                        <div class="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+                        
+                        <div class="w-full h-full border border-white/20 rounded-lg flex flex-col items-center justify-between p-2">
+                            <div class="text-xs font-bold text-white/80 self-start">${card.id}</div>
+                            <div class="text-5xl filter drop-shadow-lg transform group-hover:scale-110 transition-transform">${card.icon}</div>
+                            <div class="text-center">
+                                <div class="text-[10px] uppercase tracking-wider text-white/60">${card.role}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
+        // Рендер большой карты для стола (с анимацией переворота)
+        function renderTableCard(cardType, isRevealed, isWinner) {
+            const card = CARDS[cardType];
+            
+            return `
+                <div class="w-32 h-48 perspective-1000 ${isWinner ? 'animate-winner z-20' : ''}">
+                    <div class="relative w-full h-full transition-transform duration-700 transform-style-3d ${isRevealed ? 'rotate-y-180' : ''}">
+                        
+                        <div class="absolute w-full h-full backface-hidden rounded-xl bg-gray-900 border-4 border-gray-700 shadow-xl flex items-center justify-center bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')]">
+                            <span class="text-5xl opacity-20">⚔️</span>
+                        </div>
+
+                        <div class="absolute w-full h-full backface-hidden rotate-y-180 rounded-xl ${card.bg} border-4 ${card.border} shadow-2xl p-2 flex flex-col items-center justify-center">
+                            <div class="text-6xl mb-2 drop-shadow-md">${card.icon}</div>
+                            <div class="font-bold text-white text-lg font-cinzel">${card.name}</div>
+                            <div class="text-xs text-center text-white/80 mt-2 px-1">${card.desc}</div>
+                        </div>
+
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderModal() {
+            const isCreate = state.showModal === 'create';
+            return `
+                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                    <div class="glass-panel w-full max-w-md p-8 rounded-2xl shadow-2xl border border-gray-700 animate-deal">
+                        <h2 class="text-3xl font-bold text-white mb-6 text-center text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-200">
+                            ${isCreate ? 'Создать стол' : 'Войти в игру'}
+                        </h2>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-gray-400 text-sm mb-1">Ваше имя</label>
+                                <input id="${isCreate ? 'createName' : 'joinName'}" type="text" class="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-amber-500 outline-none">
+                            </div>
+                            
+                            ${!isCreate ? `
+                            <div>
+                                <label class="block text-gray-400 text-sm mb-1">Код стола</label>
+                                <input id="joinCode" type="text" class="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white font-mono uppercase focus:ring-2 focus:ring-amber-500 outline-none">
+                            </div>
+                            ` : ''}
+
+                            ${state.error ? `<div class="text-red-400 text-sm text-center bg-red-900/20 p-2 rounded">${state.error}</div>` : ''}
+
+                            <div class="flex gap-3 mt-6">
+                                <button onclick="closeModal()" class="flex-1 py-3 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 transition">Отмена</button>
+                                <button onclick="${isCreate ? 'createGame()' : 'joinGame()'}" class="flex-1 py-3 rounded-lg bg-gradient-to-r from-amber-600 to-yellow-600 text-white font-bold hover:shadow-lg hover:from-amber-500 hover:to-yellow-500 transition shadow-amber-900/20">
+                                    ${isCreate ? 'Создать' : 'Начать'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderMenu() {
+            return `
+                <div class="flex flex-col items-center justify-center min-h-screen p-4 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-96 h-96 bg-purple-900/30 rounded-full blur-[100px]"></div>
+                    <div class="absolute bottom-0 right-0 w-96 h-96 bg-amber-900/30 rounded-full blur-[100px]"></div>
+
+                    <div class="z-10 text-center space-y-8 animate-float">
+                        <div class="mb-12">
+                            <h1 class="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-amber-200 via-yellow-400 to-amber-700 drop-shadow-2xl tracking-tighter">
+                                IMPERATOR
+                            </h1>
+                            <p class="text-gray-400 text-lg tracking-[0.5em] mt-2 uppercase">Card Battle</p>
+                        </div>
+
+                        <div class="flex flex-col gap-4 w-full max-w-xs mx-auto">
+                            <button onclick="showModal('create')" class="group relative px-8 py-4 bg-gray-800 rounded-xl overflow-hidden border border-amber-500/30 transition-all hover:scale-105 hover:border-amber-400 hover:shadow-[0_0_30px_rgba(245,158,11,0.3)]">
+                                <div class="absolute inset-0 bg-gradient-to-r from-amber-600/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                <span class="relative font-bold text-xl text-amber-100">Новая игра</span>
+                            </button>
+                            
+                            <button onclick="showModal('join')" class="group relative px-8 py-4 bg-gray-800 rounded-xl overflow-hidden border border-blue-500/30 transition-all hover:scale-105 hover:border-blue-400 hover:shadow-[0_0_30px_rgba(59,130,246,0.3)]">
+                                <div class="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                <span class="relative font-bold text-xl text-blue-100">Присоединиться</span>
+                            </button>
+                        </div>
+                        
+                        ${!isFirebaseConfigured ? '<div class="text-xs text-gray-600 mt-8">Локальный режим (без сервера)</div>' : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderLobby() {
+            return `
+                <div class="min-h-screen flex items-center justify-center p-4">
+                    <div class="glass-panel max-w-lg w-full p-10 rounded-3xl text-center space-y-8 relative">
+                        <div class="absolute -top-4 -right-4 text-6xl animate-bounce">⏳</div>
+                        
+                        <h2 class="text-3xl font-bold text-white">Ожидание оппонента</h2>
+                        
+                        <div class="bg-gray-900/50 p-6 rounded-xl border border-gray-700">
+                            <p class="text-gray-400 text-sm mb-2">Сообщите этот код другу:</p>
+                            <div class="text-5xl font-mono text-amber-400 tracking-widest select-all cursor-pointer hover:text-amber-300 transition" onclick="navigator.clipboard.writeText('${state.gameId}')">
+                                ${state.gameId}
+                            </div>
+                        </div>
+
+                        <div class="flex justify-center gap-2">
+                            <span class="w-3 h-3 bg-gray-500 rounded-full animate-bounce" style="animation-delay: 0s"></span>
+                            <span class="w-3 h-3 bg-gray-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></span>
+                            <span class="w-3 h-3 bg-gray-500 rounded-full animate-bounce" style="animation-delay: 0.4s"></span>
+                        </div>
+
+                        <button onclick="resetApp()" class="text-gray-500 hover:text-white text-sm underline">Отмена</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderGame() {
+            const isWin = state.roundResult === 'win';
+            const isLose = state.roundResult === 'lose';
+
+            return `
+                <div class="h-screen flex flex-col justify-between overflow-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-gray-800 via-gray-900 to-black">
+                    
+                    <div class="flex justify-between items-center p-4 bg-black/40 backdrop-blur-md border-b border-white/5 z-50">
+                        <div class="flex items-center gap-4">
+                            <div class="text-right">
+                                <div class="text-xs text-gray-400">Противник</div>
+                                <div class="font-bold text-lg text-white">${state.opponentName}</div>
+                            </div>
+                            <div class="text-3xl font-black text-red-500">${state.opponentScore}</div>
+                        </div>
+                        
+                        <div class="bg-gray-800 px-4 py-1 rounded-full text-xs font-mono text-gray-400 border border-gray-700">
+                            РАУНД ${state.round} / 5
+                        </div>
+
+                        <div class="flex items-center gap-4">
+                            <div class="text-3xl font-black text-green-500">${state.myScore}</div>
+                            <div>
+                                <div class="text-xs text-gray-400">Вы</div>
+                                <div class="font-bold text-lg text-white">${state.playerName}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 relative flex flex-col items-center justify-center perspective-1000">
+                        
+                        <div class="absolute top-4 flex justify-center gap-2 -scale-75 opacity-70">
+                             ${Array(state.opponentCardsCount).fill(0).map((_, i) => renderCard(null, false, false, i * 0.1)).join('')}
+                        </div>
+
+                        ${state.waitingForOpponent && !state.revealPhase ? `
+                            <div class="absolute z-10 bg-black/60 px-6 py-3 rounded-full text-white animate-pulse border border-white/20 backdrop-blur">
+                                Ожидание хода противника...
+                            </div>
+                        ` : ''}
+
+                        ${state.roundResult ? `
+                            <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none">
+                                <h2 class="text-6xl md:text-8xl font-black uppercase tracking-tighter 
+                                    ${isWin ? 'text-green-500 drop-shadow-[0_0_20px_rgba(34,197,94,0.6)]' : 
+                                      isLose ? 'text-red-500 drop-shadow-[0_0_20px_rgba(239,68,68,0.6)]' : 'text-gray-300'} 
+                                    animate-bounce">
+                                    ${isWin ? 'ПОБЕДА!' : isLose ? 'ПОРАЖЕНИЕ' : 'НИЧЬЯ'}
+                                </h2>
+                            </div>
+                        ` : ''}
+
+                        <div class="flex items-center gap-8 md:gap-16 transform scale-110 md:scale-125">
+                            
+                            <div class="relative w-32 h-48 rounded-xl border-2 border-dashed border-white/10 flex items-center justify-center">
+                                ${state.opponentChoice ? 
+                                    renderTableCard(state.opponentChoice, state.revealPhase, state.roundResult === 'lose') 
+                                    : '<span class="text-white/10 text-4xl">?</span>'}
+                            </div>
+
+                            <div class="text-2xl font-black text-amber-500 italic bg-black/50 p-2 rounded-full border border-amber-500/50">VS</div>
+
+                            <div class="relative w-32 h-48 rounded-xl border-2 border-dashed border-white/10 flex items-center justify-center">
+                                ${state.myChoice ? 
+                                    renderTableCard(state.myChoice, true, state.roundResult === 'win') 
+                                    : '<span class="text-white/10 text-4xl">?</span>'}
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div class="relative h-48 bg-gradient-to-t from-black via-gray-900 to-transparent flex items-end justify-center pb-6 gap-2 md:gap-4 overflow-visible z-40">
+                         ${state.myCards.length > 0 ? 
+                            state.myCards.map((c, i) => renderCard(c, true, !state.myChoice, i * 0.1)).join('') : 
+                            '<div class="text-gray-500 pb-10">Нет карт</div>'
+                         }
+                    </div>
+
+                </div>
+            `;
+        }
+
+        function renderFinished() {
+            const isWin = state.gameResult === 'win';
+            const color = isWin ? 'text-green-500' : (state.gameResult === 'lose' ? 'text-red-500' : 'text-gray-400');
+            const bg = isWin ? 'from-green-900/40 to-black' : 'from-red-900/40 to-black';
+
+            return `
+                <div class="min-h-screen flex items-center justify-center bg-gradient-to-br ${bg} p-4">
+                    <div class="glass-panel p-12 rounded-3xl text-center max-w-2xl w-full border-t border-white/20 shadow-2xl animate-deal">
+                        
+                        <div class="text-8xl mb-6 filter drop-shadow-2xl">
+                            ${isWin ? '👑' : (state.gameResult === 'lose' ? '💀' : '⚖️')}
+                        </div>
+
+                        <h2 class="text-6xl font-black ${color} mb-2 tracking-tighter uppercase">
+                            ${isWin ? 'ВЕЛИКАЯ ПОБЕДА' : (state.gameResult === 'lose' ? 'ПОРАЖЕНИЕ' : 'НИЧЬЯ')}
+                        </h2>
+                        
+                        <div class="flex justify-center gap-12 my-12 text-white">
+                            <div>
+                                <div class="text-gray-400 text-sm uppercase tracking-widest">Вы</div>
+                                <div class="text-5xl font-bold">${state.myScore}</div>
+                            </div>
+                            <div class="w-px bg-gray-700"></div>
+                            <div>
+                                <div class="text-gray-400 text-sm uppercase tracking-widest">${state.opponentName}</div>
+                                <div class="text-5xl font-bold">${state.opponentScore}</div>
+                            </div>
+                        </div>
+
+                        <button onclick="resetApp()" class="w-full py-4 bg-white text-black font-bold text-xl rounded-xl hover:bg-gray-200 transition transform hover:-translate-y-1 shadow-xl">
+                            Вернуться в меню
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Init
         render();
+
     </script>
 </body>
 </html>
