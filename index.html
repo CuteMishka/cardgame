@@ -1,9 +1,12 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>E-Card: Император</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👑</text></svg>">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -62,6 +65,20 @@
             background-size: 20px 20px;
         }
     </style>
+    <div class="hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+            <defs>
+                <linearGradient id="gradEmperor" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#fbbf24;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#b45309;stop-opacity:1" />
+                </linearGradient>
+                <linearGradient id="gradSlave" x1="0%" y1="0%" x2="100%" y2="100%">
+                     <stop offset="0%" style="stop-color:#4b5563;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#1f2937;stop-opacity:1" />
+                </linearGradient>
+            </defs>
+        </svg>
+    </div>
 </head>
 <body class="bg-pattern min-h-screen text-gray-100 overflow-x-hidden">
     <div id="app"></div>
@@ -69,15 +86,15 @@
     <script>
         // ==================== FIREBASE CONFIG ====================
         const firebaseConfig = {
-  apiKey: "AIzaSyBFjleDsbPvsNnlkKp9q5a-Xq3IyTus23o",
-  authDomain: "card-game-d1fa1.firebaseapp.com",
-  databaseURL: "https://card-game-d1fa1-default-rtdb.firebaseio.com",
-  projectId: "card-game-d1fa1",
-  storageBucket: "card-game-d1fa1.firebasestorage.app",
-  messagingSenderId: "897674662962",
-  appId: "1:897674662962:web:c7824186c666e30cacd82b",
-  measurementId: "G-W9KWPSR8K8"
-};
+          apiKey: "AIzaSyBFjleDsbPvsNnlkKp9q5a-Xq3IyTus23o",
+          authDomain: "card-game-d1fa1.firebaseapp.com",
+          databaseURL: "https://card-game-d1fa1-default-rtdb.firebaseio.com",
+          projectId: "card-game-d1fa1",
+          storageBucket: "card-game-d1fa1.firebasestorage.app",
+          messagingSenderId: "897674662962",
+          appId: "1:897674662962:web:c7824186c666e30cacd82b",
+          measurementId: "G-W9KWPSR8K8"
+        };
 
         let database = null;
         // Проверка: работаем локально или через Firebase
@@ -120,14 +137,14 @@
             }
         };
 
-        const INITIAL_DECK = ['E', 'S', 'C', 'C', 'C']; // Стандартная колода E-Card
+        const INITIAL_DECK = ['E', 'S', 'C', 'C', 'C']; 
 
         let state = {
             screen: 'menu',
             gameId: '',
             playerName: '',
             isHost: false,
-            myCards: [], // Будет инициализировано при старте
+            myCards: [], 
             opponentCardsCount: 5,
             myChoice: null,
             opponentChoice: null,
@@ -136,11 +153,11 @@
             round: 1,
             opponentName: '???',
             waitingForOpponent: false,
-            roundResult: null, // 'win', 'lose', 'draw'
-            gameResult: null,  // 'win', 'lose', 'draw'
+            roundResult: null, 
+            gameResult: null,  
             error: '',
             showModal: null,
-            revealPhase: false // Для анимации вскрытия
+            revealPhase: false 
         };
 
         // ==================== STORAGE & SYNC ====================
@@ -149,7 +166,6 @@
                 database.ref('games/' + gameId).set(data);
             } else {
                 localStorage.setItem('game_' + gameId, JSON.stringify(data));
-                // Имитация задержки сети для локальной игры
                 setTimeout(() => window.dispatchEvent(new Event('storage')), 50);
             }
         }
@@ -190,7 +206,6 @@
 
         // ==================== CORE LOGIC ====================
         
-        // --- 1. BUG FIX: Исправлена логика удаления карты ---
         function playCard(cardType) {
             if (state.myChoice || state.waitingForOpponent) return;
 
@@ -198,7 +213,6 @@
                 const myRole = state.isHost ? 'player1' : 'player2';
                 const currentCards = game[myRole + 'Cards'] || [];
                 
-                // Находим ИНДЕКС первой подходящей карты
                 const cardIndex = currentCards.indexOf(cardType);
 
                 if (cardIndex === -1) {
@@ -206,10 +220,8 @@
                     return;
                 }
 
-                // Удаляем ровно одну карту по индексу
                 currentCards.splice(cardIndex, 1);
 
-                // Обновляем состояние
                 const updates = {};
                 updates[myRole + 'Cards'] = currentCards;
                 updates[myRole + 'Choice'] = cardType;
@@ -234,7 +246,7 @@
             if (!name) return setError('Введите имя');
 
             const gameId = Math.random().toString(36).substr(2, 6).toUpperCase();
-            const deck = [...INITIAL_DECK].sort(() => Math.random() - 0.5); // Перемешаем
+            const deck = [...INITIAL_DECK].sort(() => Math.random() - 0.5); 
 
             const gameData = {
                 player1Name: name,
@@ -243,10 +255,10 @@
                 player1Choice: null,
                 player2Choice: null,
                 player1Cards: deck,
-                player2Cards: deck, // У обоих одинаковый набор
+                player2Cards: deck, 
                 player1Score: 0,
                 player2Score: 0,
-                status: 'waiting', // waiting, playing, finished
+                status: 'waiting', 
                 createdAt: Date.now()
             };
 
@@ -298,26 +310,22 @@
             watchGame(state.gameId, (game) => {
                 if (!game) return;
 
-                // Лобби -> Игра
                 if (state.screen === 'lobby' && game.player2Name) {
                     state.opponentName = game.player2Name;
                     state.screen = 'playing';
                     render();
                 }
 
-                // Логика раунда
                 if (state.screen === 'playing') {
                     const myRole = state.isHost ? 'player1' : 'player2';
                     const oppRole = state.isHost ? 'player2' : 'player1';
 
-                    // Синхронизация данных
                     state.myCards = game[myRole + 'Cards'] || [];
                     state.opponentCardsCount = (game[oppRole + 'Cards'] || []).length;
                     state.myScore = game[myRole + 'Score'] || 0;
                     state.opponentScore = game[oppRole + 'Score'] || 0;
                     state.round = game.currentRound;
 
-                    // Проверка конца игры
                     if (game.status === 'finished') {
                         state.gameResult = state.myScore > state.opponentScore ? 'win' : (state.myScore < state.opponentScore ? 'lose' : 'draw');
                         state.screen = 'finished';
@@ -325,32 +333,30 @@
                         return;
                     }
 
-                    // Обработка хода (Showdown)
                     const myChoice = game[myRole + 'Choice'];
                     const oppChoice = game[oppRole + 'Choice'];
 
+                    // === ИСПРАВЛЕНИЕ 1: Обновляем состояние выбора сразу, чтобы видеть карты "рубашкой вверх" ===
+                    state.myChoice = myChoice;
+                    state.opponentChoice = oppChoice;
+                    // ========================================================================================
+
                     if (myChoice && oppChoice && !state.revealPhase) {
-                        // Оба походили, начинаем фазу вскрытия
-                        state.myChoice = myChoice;
-                        state.opponentChoice = oppChoice;
                         state.revealPhase = true;
                         state.waitingForOpponent = false;
 
                         const roundWinner = determineWinner(myChoice, oppChoice);
                         
-                        // Сохраняем результат раунда локально для отображения
                         if (roundWinner === 'player') state.roundResult = 'win';
                         else if (roundWinner === 'opponent') state.roundResult = 'lose';
                         else state.roundResult = 'draw';
 
-                        render(); // Показать закрытые карты на столе
+                        render(); 
 
-                        // Таймер анимации вскрытия
                         setTimeout(() => {
-                            // Если я хост, я обновляю счет в БД
                             if (state.isHost) {
                                 const updates = {
-                                    player1Choice: null, // Сброс выбора
+                                    player1Choice: null, 
                                     player2Choice: null,
                                     currentRound: game.currentRound + 1
                                 };
@@ -364,14 +370,16 @@
 
                                 updateGame(state.gameId, updates);
                             }
-                        }, 4000); // 4 секунды смотрим на результат
+                        }, 4000); 
                     } 
                     else if (!myChoice && !oppChoice && state.revealPhase) {
-                        // Сброс на новый раунд
                         state.revealPhase = false;
                         state.myChoice = null;
                         state.opponentChoice = null;
                         state.roundResult = null;
+                        render();
+                    } else {
+                        // Если просто пришло обновление (например, оппонент походил, а мы нет), перерисовываем
                         render();
                     }
                 }
@@ -405,21 +413,12 @@
             const app = document.getElementById('app');
             let content = '';
 
-            // --- Modal Overlays ---
-            if (state.showModal) {
-                content += renderModal();
-            }
+            if (state.showModal) content += renderModal();
 
-            // --- Screens ---
-            if (state.screen === 'menu') {
-                content += renderMenu();
-            } else if (state.screen === 'lobby') {
-                content += renderLobby();
-            } else if (state.screen === 'playing') {
-                content += renderGame();
-            } else if (state.screen === 'finished') {
-                content += renderFinished();
-            }
+            if (state.screen === 'menu') content += renderMenu();
+            else if (state.screen === 'lobby') content += renderLobby();
+            else if (state.screen === 'playing') content += renderGame();
+            else if (state.screen === 'finished') content += renderFinished();
 
             app.innerHTML = content;
         }
@@ -427,7 +426,6 @@
         function renderCard(cardType, isFaceUp = true, isInteractable = false, delay = 0) {
             const card = CARDS[cardType] || {};
             
-            // Если карта лицом вниз (рубашка)
             if (!isFaceUp) {
                 return `
                     <div class="relative w-24 h-36 rounded-xl shadow-2xl transition-all duration-300 transform hover:-translate-y-2 animate-deal" style="animation-delay: ${delay}s">
@@ -439,7 +437,6 @@
                 `;
             }
 
-            // Если карта лицом вверх
             return `
                 <div 
                     onclick="${isInteractable ? `playCard('${cardType}')` : ''}" 
@@ -465,9 +462,8 @@
             `;
         }
 
-        // Рендер большой карты для стола (с анимацией переворота)
         function renderTableCard(cardType, isRevealed, isWinner) {
-            const card = CARDS[cardType];
+            const card = CARDS[cardType] || CARDS['C']; // Fallback
             
             return `
                 <div class="w-32 h-48 perspective-1000 ${isWinner ? 'animate-winner z-20' : ''}">
@@ -619,13 +615,13 @@
                         </div>
 
                         ${state.waitingForOpponent && !state.revealPhase ? `
-                            <div class="absolute z-10 bg-black/60 px-6 py-3 rounded-full text-white animate-pulse border border-white/20 backdrop-blur">
+                            <div class="absolute z-10 bg-black/60 px-6 py-3 rounded-full text-white animate-pulse border border-white/20 backdrop-blur top-20">
                                 Ожидание хода противника...
                             </div>
                         ` : ''}
 
                         ${state.roundResult ? `
-                            <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none">
+                            <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none w-full text-center">
                                 <h2 class="text-6xl md:text-8xl font-black uppercase tracking-tighter 
                                     ${isWin ? 'text-green-500 drop-shadow-[0_0_20px_rgba(34,197,94,0.6)]' : 
                                       isLose ? 'text-red-500 drop-shadow-[0_0_20px_rgba(239,68,68,0.6)]' : 'text-gray-300'} 
@@ -635,7 +631,7 @@
                             </div>
                         ` : ''}
 
-                        <div class="flex items-center gap-8 md:gap-16 transform scale-110 md:scale-125">
+                        <div class="relative flex items-center justify-center gap-8 md:gap-16 transform scale-110 md:scale-125">
                             
                             <div class="relative w-32 h-48 rounded-xl border-2 border-dashed border-white/10 flex items-center justify-center">
                                 ${state.opponentChoice ? 
@@ -643,7 +639,11 @@
                                     : '<span class="text-white/10 text-4xl">?</span>'}
                             </div>
 
-                            <div class="text-2xl font-black text-amber-500 italic bg-black/50 p-2 rounded-full border border-amber-500/50">VS</div>
+                            <div class="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
+                                <div class="text-2xl font-black text-amber-500 italic bg-black/50 p-2 rounded-full border border-amber-500/50 shadow-lg backdrop-blur-sm">
+                                    VS
+                                </div>
+                            </div>
 
                             <div class="relative w-32 h-48 rounded-xl border-2 border-dashed border-white/10 flex items-center justify-center">
                                 ${state.myChoice ? 
@@ -706,5 +706,6 @@
         render();
 
     </script>
+    
 </body>
 </html>
